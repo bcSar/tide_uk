@@ -1,0 +1,13 @@
+h1 {
+    color: MidnightBlue;
+    font-size: 35px;
+    text-align: center;
+    padding-bottom: 15px;
+}
+
+#map {
+   
+    width: 100%;
+    height: 550px;
+}
+ 

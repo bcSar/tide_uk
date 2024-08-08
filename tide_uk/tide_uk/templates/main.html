@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset='utf-8' />
+    <title>OpenMapTiles OSM Bright style</title>
+    <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+    <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
+    <link type="text/css" href="{{ url_for('static', filename='content/main.css')}}" rel="stylesheet" />
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+</head>
+<body>
+    <div><h1>TIDE MONITORING</h1></div>
+    <div id="map"></div>
+
+    <script>
+            var map = new maplibregl.Map({
+                container: 'map',
+                style: 'https://api.maptiler.com/maps/streets-v2/style.json?key=XPWzTGVLvDsLFOMe5uzz',
+                center: [-4.4800578, 54.1543288],
+                zoom: 4
+            });
+
+            let markersData = [];
+            const markers = [];
+
+            function getPopupContent(marker) {
+                return ` <style>
+                                    .main{
+                                        width: 180px;
+
+                                    }
+                                    h4{
+                                        margin: 0 ;
+                                    }
+                                    .tab {
+                                      display: flex;
+                                      flex-wrap: wrap;
+                                    }
+
+                                    .tab > input[type="radio"] {
+                                      display: none;
+                                    }
+
+                                    .tab-content {
+                                      display: none;
+                                      width: 200px;
+                                      margin-top: 1rem;
+                                    }
+
+                                    #tab-btn-1:checked~#content-1,
+                                    #tab-btn-2:checked~#content-2 {
+                                      display: block;
+                                    }
+
+                                    .tab > label {
+                                      display: block;
+                                      padding: 0.5rem 1rem;
+                                      cursor: pointer;
+                                      transition: color .15s ease-in-out,background-color .15s ease-in-out,border-color .15s ease-in-out;
+                                      text-decoration: none;
+                                      color: #0d6efd;
+                                      border: 0;
+                                      border-radius: 0.375rem;
+                                      background: 0 0;
+                                    }
+                                    .tab > input[type="radio"]:checked + label {
+                                      cursor: default;
+                                      color: #fff;
+                                      background-color: #0d6efd;
+                                    }
+                                    </style>
+                                    <div class='main'>
+                                    <img src="/static/images/${marker.place.toLowerCase()}.jpg"  width="180" height="150" />
+                                    <div class="tab">
+                                      <input checked id="tab-btn-1" name="tab-btn" type="radio" value="">
+                                      <label for="tab-btn-1">m</label>
+                                      <input id="tab-btn-2" name="tab-btn" type="radio" value="">
+                                      <label for="tab-btn-2">mAOD</label>
+
+                                      <div class="tab-content" id="content-1">
+                                        <h4>place: ${marker.place} </h4>
+                                        <h4>station: ${marker.station1}</h4>
+                                        <h4>datetime: ${marker.datetime1}</h4>
+                                        <h4>parameter name: ${marker.parametername}</h4>
+                                        <h4>value: ${marker.value1}</h4>
+                                        <h4>unit: ${marker.unit1}</h4>
+                                        <h4>period: ${marker.period}</h4>
+                                      </div>
+                                      <div class="tab-content" id="content-2">
+                                        <h4>place: ${marker.place} </h4>
+                                        <h4>station: ${marker.station2}</h4>
+                                        <h4>datetime: ${marker.datetime2}</h4>
+                                        <h4>parameter name: ${marker.parametername}</h4>
+                                        <h4>value: ${marker.value2}</h4>
+                                        <h4>unit: ${marker.unit2}</h4>
+                                        <h4>period: ${marker.period}</h4>
+                                      </div>
+                                      </div>`;
+            }
+
+             
+
+            function addMarkers() {
+                markersData.forEach((marker, index) => {
+                     const el = document.createElement('div');
+                     el.className = 'marker';               
+                     const currentMarker = new maplibregl.Marker(el)
+
+                     currentMarker.setLngLat([marker.long, marker.lat])
+                          .setPopup(new maplibregl.Popup({ offset: 10 , closeButton: true, anchor: 'left' }).setHTML(getPopupContent(marker)))
+                          .addTo(map);
+
+                     currentMarker.getElement().addEventListener('click', function() {
+                      map.flyTo({
+                                  center: [marker.long, marker.lat],
+                                  zoom: 10,
+                                  essential: true
+                              });
+                    })
+                        
+                    currentMarker.getPopup().on('close', () => {
+                        map.flyTo({
+                                center: [-4.4800578, 54.1543288],
+                                zoom: 4,
+                                essential: true
+                            });
+                        });
+                    markers.push(currentMarker); 
+                    
+                });
+            }
+
+            function loadMarkers() {
+                fetch('/api/markers')
+                    .then(response => response.json())
+                    .then(data => {
+                        markersData = data; 
+                        addMarkers();
+                    })
+                    
+            }
+
+            function updatePopups() {
+                fetch('/api/markers')
+                    .then(response => response.json())
+                    .then(newMarkersData => {
+                    
+                        if (JSON.stringify(markersData) !== JSON.stringify(newMarkersData)) {
+                            markersData = newMarkersData; 
+                            markers.forEach((marker, index) => {
+                    if (markersData[index]) {
+                        marker.getPopup().setHTML(getPopupContent(markersData[index]));
+                    }
+                });
+            }
+        })
+                    .catch(error => console.error('Ошибка при обновлении попапов:', error));
+            }
+
+            const socket = io.connect();
+
+            socket.on('update_markers', function(newMarkers) {
+                markersData = newMarkers; 
+                updatePopups();  
+            });
+
+            map.on('load', function () {
+                loadMarkers();
+            });
+
+    </script>
+</body>
+</html>
